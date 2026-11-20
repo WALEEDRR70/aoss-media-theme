@@ -1,0 +1,23 @@
+{#
+| Variable                | Type     | Description                 |
+|-------------------------|----------|-----------------------------|
+| component.title         | ?string  | Section title               |
+| component.kicker        | ?string  | Small English label         |
+| component.steps         | object[] | Steps                       |
+| component.steps[].en    | string   | Step name (English, large)  |
+| component.steps[].ar    | ?string  | Step description (Arabic)   |
+#}
+<section component-id="{{ componentId }}" data-testid="aoss-process" class="s-block aoss-block">
+  <div class="container">
+    {% include 'pages.partials.aoss.section-head' with { title: component.title, kicker: component.kicker } %}
+    <div class="aoss-steps">
+      {% for step in component.steps %}
+        <div class="aoss-step">
+          <i>{{ '%02d'|format(loop.index) }}</i>
+          <b>{{ step.en }}</b>
+          {% if step.ar %}<p>{{ step.ar }}</p>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,22 @@
+{#
+| Variable                | Type     | Description         |
+|-------------------------|----------|---------------------|
+| component.title         | ?string  | Section title       |
+| component.kicker        | ?string  | Small English label |
+| component.items         | object[] | Questions           |
+| component.items[].q     | string   |                     |
+| component.items[].a     | string   |                     |
+#}
+<section component-id="{{ componentId }}" data-testid="aoss-faq" class="s-block aoss-block">
+  <div class="container">
+    {% include 'pages.partials.aoss.section-head' with { title: component.title, kicker: component.kicker } %}
+    <div class="aoss-faq">
+      {% for item in component.items %}
+        <details>
+          <summary>{{ item.q }}</summary>
+          <p>{{ item.a }}</p>
+        </details>
+      {% endfor %}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,28 @@
+{#
+| Variable                | Type     | Description                                    |
+|-------------------------|----------|------------------------------------------------|
+| component.title         | ?string  | Section title                                  |
+| component.kicker        | ?string  | Small English label                            |
+| component.items         | object[] | Services                                       |
+| component.items[].en    | ?string  | English name                                   |
+| component.items[].ar    | ?string  | Arabic description                             |
+| component.items[].url   | ?string  | Link (category, product, page or WhatsApp)     |
+| component.items[].label | ?string  | Small call-to-action under the card            |
+#}
+<section component-id="{{ componentId }}" id="aoss-services" data-testid="aoss-services" class="s-block aoss-block">
+  <div class="container">
+    {% include 'pages.partials.aoss.section-head' with { title: component.title, kicker: component.kicker } %}
+    <div class="aoss-grid">
+      {% for item in component.items %}
+        <a class="aoss-card" href="{{ item.url ?: '#' }}">
+          <span class="aoss-card__n">{{ '%02d'|format(loop.index) }}</span>
+          <span>
+            {% if item.en %}<span class="aoss-card__en">{{ item.en }}</span>{% endif %}
+            {% if item.ar %}<span class="aoss-card__ar">{{ item.ar }}</span>{% endif %}
+          </span>
+          {% if item.label %}<em class="aoss-card__go">{{ item.label }}</em>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>

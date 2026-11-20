@@ -1,0 +1,36 @@
+{#
+  Talent (makeup artists, models, Saudi-coffee hosts...). Each person is a product
+  (ideally a "booking" product) inside the selected category; product images act as the portfolio.
+| Variable                   | Type      | Description                         |
+|----------------------------|-----------|-------------------------------------|
+| component.title            | ?string   | Section title                       |
+| component.kicker           | ?string   | Small English label                 |
+| component.description      | ?string   | Intro text                          |
+| component.category         | object[]  | Selected talent category            |
+| component.limit            | ?int      | Max people to show                  |
+| component.display_all_text | ?string   | Label of the "view all" link        |
+#}
+{% set cat = component.category.id is defined ? component.category : component.category|first %}
+<section component-id="{{ componentId }}" id="aoss-talent" data-testid="aoss-talent" class="s-block aoss-block aoss-talent">
+  <div class="container">
+    <div class="aoss-head">
+      {% if component.title %}<h2>{{ component.title }}</h2>{% endif %}
+      {% if component.kicker %}<span>{{ component.kicker }}</span>{% endif %}
+      {% if cat and cat.url and component.display_all_text %}
+        <a class="aoss-head__all" href="{{ cat.url }}">{{ component.display_all_text }}</a>
+      {% endif %}
+    </div>
+    {% if component.description %}<p class="aoss-talent__intro">{{ component.description }}</p>{% endif %}
+    {% if cat %}
+      <salla-products-list
+        data-testid="aoss-talent-list"
+        class="aoss-talent__list"
+        source="categories"
+        source-value="[{{ cat.id }}]"
+        limit="{{ component.limit ?: 8 }}">
+      </salla-products-list>
+    {% else %}
+      <p class="aoss-muted">{{ trans('blocks.aoss.talent_pick_category') }}</p>
+    {% endif %}
+  </div>
+</section>

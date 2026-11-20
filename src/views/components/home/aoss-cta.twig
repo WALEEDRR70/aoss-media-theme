@@ -1,0 +1,23 @@
+{#
+| Variable              | Type    | Description     |
+|-----------------------|---------|-----------------|
+| component.title       | string  | Headline        |
+| component.text        | ?string | Supporting text |
+| component.button_text | ?string |                 |
+| component.button_url  | ?string |                 |
+#}
+<section component-id="{{ componentId }}" data-testid="aoss-cta" class="s-block aoss-block">
+  <div class="container">
+    <div class="aoss-hero aoss-hero--cta">
+      <span class="aoss-orbit o2" aria-hidden="true"></span>
+      <span class="aoss-orbit o1" aria-hidden="true"></span>
+      <h2 class="aoss-hero__title">{{ component.title }}</h2>
+      {% if component.text %}<p class="aoss-hero__sub">{{ component.text }}</p>{% endif %}
+      {% if component.button_text %}
+        <div class="aoss-cta">
+          <a class="aoss-btn aoss-btn--light" href="{{ component.button_url ?: '#' }}">{{ component.button_text }}</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>

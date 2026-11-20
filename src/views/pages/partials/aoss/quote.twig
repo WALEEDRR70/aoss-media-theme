@@ -1,0 +1,15 @@
+{# Quote / booking box under the add-to-cart button. Expects: product, is_talent #}
+{% set wa = theme.settings.get('aoss_whatsapp', '') %}
+{% if wa %}
+  {% set msg = (is_talent ? trans('blocks.aoss.wa_talent') : trans('blocks.aoss.wa_service')) ~ ' ' ~ product.name %}
+  <div class="aoss-quote">
+    <a target="_blank" rel="noopener" href="https://wa.me/{{ wa }}?text={{ msg|url_encode }}">
+      {{ is_talent ? trans('blocks.aoss.book_talent') : trans('blocks.aoss.request_quote') }}
+    </a>
+    <ul>
+      <li>{{ trans('blocks.aoss.trust_direct') }}</li>
+      <li>{{ trans('blocks.aoss.trust_custom') }}</li>
+      <li>{{ trans('blocks.aoss.trust_secure') }}</li>
+    </ul>
+  </div>
+{% endif %}

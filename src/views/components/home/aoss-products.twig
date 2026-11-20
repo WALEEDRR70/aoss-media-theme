@@ -1,0 +1,23 @@
+{#
+| Variable                 | Type      | Description                                   |
+|--------------------------|-----------|-----------------------------------------------|
+| component.title          | ?string   | Section title                                 |
+| component.kicker         | ?string   | Small English label                           |
+| component.categories     | object[]  | Optional categories (empty = latest products) |
+| component.limit          | ?int      | Max products                                  |
+#}
+<section component-id="{{ componentId }}" id="aoss-products" data-testid="aoss-products" class="s-block aoss-block">
+  <div class="container">
+    {% include 'pages.partials.aoss.section-head' with { title: component.title, kicker: component.kicker } %}
+    {% if component.categories|length %}
+      <salla-products-list
+        data-testid="aoss-products-list"
+        source="categories"
+        source-value="[{{ component.categories|map((c) => c.id)|join(',') }}]"
+        limit="{{ component.limit ?: 12 }}">
+      </salla-products-list>
+    {% else %}
+      <salla-products-list data-testid="aoss-products-latest" source="latest" limit="{{ component.limit ?: 12 }}"></salla-products-list>
+    {% endif %}
+  </div>
+</section>

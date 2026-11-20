@@ -1,0 +1,38 @@
+{#
+| Variable                 | Type    | Description                              |
+|--------------------------|---------|------------------------------------------|
+| component.kicker         | ?string | Small line above the headline            |
+| component.title          | string  | Main headline (large, usually English)   |
+| component.subtitle       | ?string | Supporting text (usually Arabic)         |
+| component.background     | ?string | Optional background image                |
+| component.show_orbits    | bool    | Animated orbital lines                   |
+| component.primary_text   | ?string | Primary button label                     |
+| component.primary_url    | ?string | Primary button link                      |
+| component.secondary_text | ?string | Secondary button label                   |
+| component.secondary_url  | ?string | Secondary button link                    |
+| position                 | int     | Sorting number start from zero           |
+#}
+<section component-id="{{ componentId }}" data-testid="aoss-hero" class="s-block aoss-block">
+  <div class="container">
+    <div class="aoss-hero{{ component.background ? ' has-bg' : '' }}"
+         {% if component.background %}style="--aoss-hero-bg:url('{{ component.background }}')"{% endif %}>
+      {% if component.show_orbits %}
+        <span class="aoss-orbit o3" aria-hidden="true"></span>
+        <span class="aoss-orbit o2" aria-hidden="true"></span>
+        <span class="aoss-orbit o1" aria-hidden="true"></span>
+        <span class="aoss-core" aria-hidden="true"></span>
+      {% endif %}
+      {% if component.kicker %}<div class="aoss-kicker">{{ component.kicker }}</div>{% endif %}
+      <h1 class="aoss-hero__title">{{ component.title }}</h1>
+      {% if component.subtitle %}<p class="aoss-hero__sub">{{ component.subtitle }}</p>{% endif %}
+      <div class="aoss-cta">
+        {% if component.primary_text %}
+          <a class="aoss-btn aoss-btn--light" href="{{ component.primary_url ?: '#aoss-products' }}">{{ component.primary_text }}</a>
+        {% endif %}
+        {% if component.secondary_text %}
+          <a class="aoss-btn aoss-btn--ghost" href="{{ component.secondary_url ?: '#aoss-services' }}">{{ component.secondary_text }}</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>

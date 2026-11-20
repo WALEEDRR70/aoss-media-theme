@@ -1,0 +1,16 @@
+{#
+| Variable               | Type     | Description         |
+|------------------------|----------|---------------------|
+| component.title        | ?string  | Section title       |
+| component.kicker       | ?string  | Small English label |
+| component.tags         | object[] | Audiences           |
+| component.tags[].name  | string   |                     |
+#}
+<section component-id="{{ componentId }}" data-testid="aoss-audiences" class="s-block aoss-block">
+  <div class="container">
+    {% include 'pages.partials.aoss.section-head' with { title: component.title, kicker: component.kicker } %}
+    <div class="aoss-tags">
+      {% for tag in component.tags %}<span>{{ tag.name }}</span>{% endfor %}
+    </div>
+  </div>
+</section>
