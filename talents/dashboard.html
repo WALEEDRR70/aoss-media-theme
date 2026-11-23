@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة الكادر | AOSS MEDIA</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <main class="wrap" id="app"><div class="empty" style="margin:60px 0">جاري التحميل…</div></main>
+
+  <script type="module">
+    import { chrome, esc, money, $, $$, toast } from './js/ui.js';
+    import {
+      CATEGORIES, CREW_ROLES, CITIES, DAYS, UNITS, MAX_GALLERY,
+      emptyTalent, uid, slugify, imageSrc, isAdmin,
+    } from './js/store.js';
+
+    const b = await chrome('dash');
+    const app = $('#app');
+    let t = null;
+    let tab = location.hash.slice(1) || 'profile';
+    let dirty = false;
+
+    b.onAuth(async (u) => {
+      if (!u) return renderAuth();
+      t = (await b.getTalent(u.uid)) || emptyTalent(u.uid, u.email);
+      t.attributes = { ...emptyTalent().attributes, ...(t.attributes || {}) };
+      t.social = { ...emptyTalent().social, ...(t.social || {}) };
+      t.availability = { ...emptyTalent().availability, ...(t.availability || {}) };
+      renderDash();
+    });
+
+    /* ------------------------------ auth ------------------------------ */
+    function renderAuth(mode = 'up') {
+      app.innerHTML = `
+        <div class="auth panel">
+          <h2>${mode === 'up' ? 'انضم إلى كوادر أسس ميديا' : 'تسجيل الدخول'}</h2>
+          <p class="muted mt0">${mode === 'up' ? 'أنشئ ملفك المهني، حدّد أسعارك وباقاتك، واستقبل طلبات الحجز.' : 'ادخل إلى لوحة التحكم الخاصة بك.'}</p>
+          <form id="af">
+            <div class="field"><label class="f">البريد الإلكتروني</label><input class="in" type="email" name="email" required autocomplete="email"></div>
+            <div class="field"><label class="f">كلمة المرور <span class="hint">(6 أحرف على الأقل)</span></label><input class="in" type="password" name="pw" minlength="6" required autocomplete="${mode === 'up' ? 'new-password' : 'current-password'}"></div>
+            <button class="btn block" type="submit">${mode === 'up' ? 'إنشاء الحساب' : 'دخول'}</button>
+          </form>
+          <p style="text-align:center;margin:14px 0 0">
+            ${mode === 'up' ? 'لديك حساب؟ <button class="link-btn" data-m="in">سجّل الدخول</button>' : 'جديد هنا؟ <button class="link-btn" data-m="up">أنشئ حسابًا</button> · <button class="link-btn" data-m="reset">نسيت كلمة المرور</button>'}
+          </p>
+        </div>`;
+      $$('[data-m]', app).forEach((x) => x.addEventListener('click', async () => {
+        if (x.dataset.m === 'reset') {
+          const email = $('#af').email.value.trim();
+          if (!email) return toast('اكتب بريدك أولًا');
+          try { await b.resetPassword(email); toast('أرسلنا رابط إعادة التعيين إلى بريدك'); } catch (e) { toast(e.message); }
+          return;
+        }
+        renderAuth(x.dataset.m);
+      }));
+      $('#af').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const btn = f.querySelector('button');
+        btn.disabled = true;
+        try {
+          if (mode === 'up') await b.signUp(f.email.value.trim().toLowerCase(), f.pw.value);
+          else await b.signIn(f.email.value.trim().toLowerCase(), f.pw.value);
+        } catch (err) {
+          btn.disabled = false;
+          toast(authError(err));
+        }
+      });
+    }
+    function authError(err) {
+      const c = err.code || '';
+      if (c.includes('email-already-in-use')) return 'هذا البريد مسجّل مسبقًا';
+      if (c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found')) return 'البريد أو كلمة المرور غير صحيحة';
+      if (c.includes('weak-password')) return 'كلمة المرور ضعيفة';
+      return err.message || 'حدث خطأ';
+    }
+
+    /* ------------------------------ dashboard ------------------------------ */
+    const TABS = [
+      ['profile', 'الملف الشخصي'],
+      ['gallery', 'معرض الصور'],
+      ['pricing', 'الخدمات والأسعار'],
+      ['packages', 'الباقات'],
+      ['schedule', 'الأوقات والمدن'],
+      ['bookings', 'الحجوزات'],
+    ];
+    const STATUS = { pending: 'بانتظار الاعتماد', approved: 'معتمد وظاهر', hidden: 'مخفي' };
+
+    async function renderDash() {
+      const bookings = await b.listBookings(t.uid).catch(() => []);
+      const fresh = bookings.filter((x) => x.status === 'new').length;
+      const link = new URL('profile.html?u=' + encodeURIComponent(t.slug || t.uid), location.href).href;
+      app.innerHTML = `
+        <div class="panel" style="margin-top:24px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <b>${esc(t.name || 'ملفك الجديد')}</b> <span class="status ${t.status}">${STATUS[t.status] || ''}</span>
+            <div class="preview-link muted" dir="ltr" style="text-align:end">${esc(decodeURI(link))}</div>
+          </div>
+          <a class="btn sm ghost" href="${esc(link)}" target="_blank" rel="noopener">معاينة الملف</a>
+          ${isAdmin() ? '<a class="btn sm ghost" href="admin.html">لوحة الإدارة</a>' : ''}
+          <button class="btn sm ghost" id="out">خروج</button>
+        </div>
+        <div class="dash">
+          <nav class="side">${TABS.map(([id, l]) => `<button data-tab="${id}" class="${tab === id ? 'on' : ''}">${l}${id === 'bookings' && fresh ? `<span class="cnt">${fresh}</span>` : ''}</button>`).join('')}</nav>
+          <section id="pane"></section>
+        </div>`;
+      $('#out').addEventListener('click', () => b.signOut());
+      $$('[data-tab]').forEach((x) => x.addEventListener('click', () => {
+        tab = x.dataset.tab;
+        location.hash = tab;
+        $$('[data-tab]').forEach((y) => y.classList.toggle('on', y === x));
+        renderPane(bookings);
+      }));
+      renderPane(bookings);
+    }
+
+    function saveBar(extra = '') {
+      return `<div class="savebar"><button class="btn" data-save>حفظ التغييرات</button><span class="msg" id="msg">${extra}</span></div>`;
+    }
+
+    async function save(silent) {
+      if (!t.name.trim()) { toast('اكتب اسمك في الملف الشخصي أولًا'); tab = 'profile'; return false; }
+      const wanted = slugify(t.slug || t.name) || t.uid.slice(0, 8);
+      if (await b.slugTaken(wanted, t.uid)) { toast('رابط الملف مستخدم، اختر رابطًا آخر'); return false; }
+      const old = t._slug;
+      t.slug = wanted;
+      try {
+        if (b.claimSlug) await b.claimSlug(wanted, t.uid, old);
+        const fresh = !(await b.getTalent(t.uid));
+        await b.saveTalent(t);
+        t._slug = t.slug;
+        if (fresh) t.status = 'pending';
+        dirty = false;
+        if (!silent) toast(fresh ? 'تم إنشاء ملفك — سيظهر للعملاء بعد اعتماده' : 'تم الحفظ ✓');
+        return true;
+      } catch (e) {
+        toast('تعذّر الحفظ: ' + (e.message || e));
+        return false;
+      }
+    }
+
+    function bindSave(pane, after) {
+      $$('[data-save]', pane).forEach((x) => x.addEventListener('click', async () => {
+        x.disabled = true;
+        if (after) after();
+        const ok = await save();
+        x.disabled = false;
+        if (ok) renderDash();
+      }));
+    }
+
+    function renderPane(bookings) {
+      const pane = $('#pane');
+      pane.oninput = pane.onchange = null;
+      ({ profile, gallery, pricing, packages, schedule, bookings: bookingsPane })[tab](pane, bookings);
+    }
+
+    /* ---------- profile ---------- */
+    async function profile(pane) {
+      const [cv, av] = await Promise.all([imageSrc(t.cover), imageSrc(t.avatar)]);
+      const a = t.attributes;
+      const showModel = t.category === 'model';
+      pane.innerHTML = `
+        <div class="panel">
+          <h2>الصورة والخلفية</h2>
+          <div class="coverbox" id="cv" style="background-image:url('${esc(cv)}')">
+            <button class="btn sm light chg" id="cvBtn">تغيير الخلفية</button>
+            <div class="avatarbox" id="avBox" style="background-image:url('${esc(av)}')" title="تغيير الصورة الشخصية"><span class="chg2">✎</span></div>
+          </div>
+          <input type="file" accept="image/*" id="cvIn" hidden><input type="file" accept="image/*" id="avIn" hidden>
+          <p class="hint mt0">الخلفية: صورة عرضية (1600×600 مثلًا). الصورة الشخصية: مربعة وواضحة الوجه.</p>
+        </div>
+        <div class="panel">
+          <h2>البيانات الأساسية</h2>
+          <div class="row">
+            <div class="field"><label class="f">الاسم الظاهر</label><input class="in" data-k="name" value="${esc(t.name)}" maxlength="60" placeholder="مثل: سارة"></div>
+            <div class="field"><label class="f">التخصص</label><select class="in" data-k="category">${CATEGORIES.map((c) => `<option value="${c.id}" ${c.id === t.category ? 'selected' : ''}>${c.ar}</option>`).join('')}</select></div>
+          </div>
+          <div class="field" id="crewF" style="${t.category === 'crew' ? '' : 'display:none'}"><label class="f">نوع الكادر</label>
+            <select class="in" data-k="crewRole"><option value="">اختر</option>${CREW_ROLES.map((r) => `<option ${r === t.crewRole ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+          <div class="field"><label class="f">عنوان مختصر <span class="hint">(يظهر تحت اسمك)</span></label><input class="in" data-k="headline" value="${esc(t.headline)}" maxlength="80" placeholder="مثل: مودل إعلانات وتصوير منتجات"></div>
+          <div class="field"><label class="f">نبذة عنك</label><textarea class="in" data-k="bio" maxlength="1200" placeholder="خبرتك، أبرز أعمالك، أسلوبك…">${esc(t.bio)}</textarea></div>
+          <div class="row">
+            <div class="field"><label class="f">الجنس</label><select class="in" data-k="gender"><option value="">—</option><option ${t.gender === 'أنثى' ? 'selected' : ''}>أنثى</option><option ${t.gender === 'ذكر' ? 'selected' : ''}>ذكر</option></select></div>
+            <div class="field"><label class="f">اللغات <span class="hint">(افصل بفاصلة)</span></label><input class="in" id="langs" value="${esc((t.languages || []).join('، '))}"></div>
+            <div class="field"><label class="f">لون ملفك</label><input class="in" type="color" data-k="accent" value="${esc(t.accent || '#0a0a0a')}" style="height:46px;padding:4px"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>تفاصيل مهنية</h2>
+          <div class="row">
+            ${showModel ? `
+            <div class="field"><label class="f">الطول (سم)</label><input class="in" data-a="height" value="${esc(a.height)}" inputmode="numeric"></div>
+            <div class="field"><label class="f">المقاس</label><input class="in" data-a="size" value="${esc(a.size)}" placeholder="S / M / 38"></div>
+            <div class="field"><label class="f">لون الشعر</label><input class="in" data-a="hairColor" value="${esc(a.hairColor)}"></div>
+            <div class="field"><label class="f">لون العين</label><input class="in" data-a="eyeColor" value="${esc(a.eyeColor)}"></div>` : ''}
+            <div class="field"><label class="f">سنوات الخبرة</label><input class="in" data-a="experience" value="${esc(a.experience)}" inputmode="numeric"></div>
+          </div>
+          <div class="field"><label class="f">مجالات التميّز <span class="hint">(افصل بفاصلة)</span></label><input class="in" data-a="specialties" value="${esc(a.specialties)}" placeholder="مثل: إعلانات، عرائس، تصوير منتجات"></div>
+        </div>
+        <div class="panel">
+          <h2>رابط الملف والحسابات</h2>
+          <div class="field"><label class="f">رابط ملفك المختصر</label><input class="in" data-k="slug" value="${esc(t.slug)}" placeholder="sara-model" dir="ltr"></div>
+          <div class="row">
+            <div class="field"><label class="f">إنستقرام</label><input class="in" data-s="instagram" value="${esc(t.social.instagram)}" dir="ltr" placeholder="@username"></div>
+            <div class="field"><label class="f">تيك توك</label><input class="in" data-s="tiktok" value="${esc(t.social.tiktok)}" dir="ltr"></div>
+            <div class="field"><label class="f">جوال التواصل <span class="hint">(لا يظهر للعملاء)</span></label><input class="in" data-s="whatsapp" value="${esc(t.social.whatsapp)}" dir="ltr" placeholder="9665XXXXXXXX"></div>
+          </div>
+          <p class="hint">حساباتك ورقمك تستخدمها إدارة أسس ميديا للتنسيق، والحجز يتم عبر المنصة.</p>
+        </div>
+        ${saveBar()}`;
+
+      pane.oninput = (e) => {
+        const el = e.target;
+        dirty = true;
+        if (el.dataset.k) t[el.dataset.k] = el.value;
+        if (el.dataset.a) t.attributes[el.dataset.a] = el.value;
+        if (el.dataset.s) t.social[el.dataset.s] = el.value;
+        if (el.id === 'langs') t.languages = el.value.split(/[،,]/).map((s) => s.trim()).filter(Boolean);
+        if (el.dataset.k === 'category') { profile(pane); }
+      };
+      const pick = async (input, key, box) => {
+        const file = input.files[0];
+        if (!file) return;
+        box.style.opacity = 0.5;
+        try {
+          const old = t[key];
+          t[key] = await b.uploadImage(file);
+          box.style.backgroundImage = `url("${await imageSrc(t[key])}")`;
+          if (old && old !== t[key] && !(t.gallery || []).includes(old)) b.deleteImage(old);
+          if (t.name.trim()) await save(true);
+          toast('تم رفع الصورة');
+        } catch (e) { toast('تعذّر رفع الصورة: ' + e.message); }
+        box.style.opacity = 1;
+        input.value = '';
+      };
+      $('#cvBtn').addEventListener('click', () => $('#cvIn').click());
+      $('#avBox').addEventListener('click', () => $('#avIn').click());
+      $('#cvIn').addEventListener('change', (e) => pick(e.target, 'cover', $('#cv')));
+      $('#avIn').addEventListener('change', (e) => pick(e.target, 'avatar', $('#avBox')));
+      bindSave(pane);
+    }
+
+    /* ---------- gallery ---------- */
+    async function gallery(pane) {
+      const g = t.gallery || (t.gallery = []);
+      const srcs = await Promise.all(g.map(imageSrc));
+      pane.innerHTML = `
+        <div class="panel">
+          <h2>معرض الصور <span class="hint">(${g.length} من ${MAX_GALLERY})</span></h2>
+          <label class="upl" id="drop">
+            <b>اسحب الصور هنا أو اضغط للاختيار</b>
+            <span class="hint">يمكنك اختيار حتى ${MAX_GALLERY - g.length} صورة دفعة واحدة · تُضغط تلقائيًا للحفاظ على السرعة</span>
+            <input type="file" accept="image/*" multiple id="gin" hidden ${g.length >= MAX_GALLERY ? 'disabled' : ''}>
+          </label>
+          <p class="hint">اسحب الصور لترتيبها. الصورة الأولى تظهر أولًا في ملفك.</p>
+          <div class="gal-edit" id="ge">${g.map((ref, i) => `
+            <div class="it" draggable="true" data-i="${i}"><img src="${esc(srcs[i])}" alt=""><span class="no">${i + 1}</span>
+              <button class="rm" data-rm="${i}" aria-label="حذف">✕</button></div>`).join('')}</div>
+        </div>`;
+      const input = $('#gin');
+      const drop = $('#drop');
+      const handle = async (files) => {
+        files = [...files].filter((f) => f.type.startsWith('image/'));
+        const room = MAX_GALLERY - g.length;
+        if (!room) return toast('وصلت للحد الأقصى ' + MAX_GALLERY + ' صورة');
+        if (files.length > room) toast(`سيتم رفع أول ${room} صور فقط`);
+        files = files.slice(0, room);
+        const ge = $('#ge');
+        const holders = files.map(() => {
+          const d = document.createElement('div');
+          d.className = 'it loading';
+          d.textContent = 'جاري الرفع…';
+          ge.appendChild(d);
+          return d;
+        });
+        let done = 0;
+        // Upload a few at a time to keep the browser responsive.
+        const queue = files.map((f, i) => ({ f, i }));
+        const results = new Array(files.length);
+        const worker = async () => {
+          while (queue.length) {
+            const { f, i } = queue.shift();
+            try {
+              results[i] = await b.uploadImage(f);
+              holders[i].textContent = '✓';
+            } catch (e) {
+              holders[i].textContent = 'فشل';
+            }
+            done++;
+            drop.querySelector('b').textContent = `جاري الرفع ${done} / ${files.length}`;
+          }
+        };
+        await Promise.all([worker(), worker(), worker()]);
+        results.filter(Boolean).forEach((r) => g.push(r));
+        if (!t.cover && g[0]) t.cover = g[0];
+        if (t.name.trim()) await save(true); else dirty = true;
+        toast(`تمت إضافة ${results.filter(Boolean).length} صورة`);
+        gallery(pane);
+      };
+      input.addEventListener('change', () => handle(input.files));
+      ['dragover', 'dragenter'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('drag'); }));
+      ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove('drag')));
+      drop.addEventListener('drop', (e) => { e.preventDefault(); handle(e.dataTransfer.files); });
+
+      $('#ge').addEventListener('click', async (e) => {
+        const rm = e.target.closest('[data-rm]');
+        if (!rm) return;
+        const [ref] = g.splice(+rm.dataset.rm, 1);
+        if (ref !== t.cover && ref !== t.avatar) b.deleteImage(ref);
+        if (t.name.trim()) await save(true);
+        gallery(pane);
+      });
+      // drag to reorder
+      let from = null;
+      $$('#ge .it').forEach((it) => {
+        it.addEventListener('dragstart', () => { from = +it.dataset.i; it.classList.add('dragging'); });
+        it.addEventListener('dragend', () => it.classList.remove('dragging'));
+        it.addEventListener('dragover', (e) => e.preventDefault());
+        it.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          const to = +it.dataset.i;
+          if (from === null || from === to) return;
+          const [m] = g.splice(from, 1);
+          g.splice(to, 0, m);
+          from = null;
+          if (t.name.trim()) await save(true);
+          gallery(pane);
+        });
+      });
+    }
+
+    /* ---------- pricing ---------- */
+    function pricing(pane) {
+      const s = t.services || (t.services = []);
+      pane.innerHTML = `
+        <div class="panel">
+          <h2>الخدمات والأسعار</h2>
+          <p class="muted mt0">أضف كل خدمة تقدمها بسعرها ووحدة التسعير. أنت من يحدد السعر.</p>
+          <div id="list">${s.map((x, i) => `
+            <div class="repeat" data-i="${i}">
+              <div class="head">خدمة ${i + 1}<button class="btn sm ghost" data-del="${i}">حذف</button></div>
+              <div class="row">
+                <div class="field"><label class="f">اسم الخدمة</label><input class="in" data-f="name" value="${esc(x.name)}" placeholder="مثل: تصوير إعلاني"></div>
+                <div class="field"><label class="f">السعر (ر.س)</label><input class="in" type="number" min="0" data-f="price" value="${esc(x.price)}"></div>
+                <div class="field"><label class="f">لكل</label><select class="in" data-f="unit">${Object.entries(UNITS).map(([k, v]) => `<option value="${k}" ${k === x.unit ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+                <div class="field"><label class="f">الحد الأدنى للساعات</label><input class="in" type="number" min="1" data-f="minHours" value="${esc(x.minHours || 1)}"></div>
+              </div>
+              <div class="field" style="margin:0"><label class="f">ملاحظة <span class="hint">(اختياري)</span></label><input class="in" data-f="notes" value="${esc(x.notes)}" placeholder="مثل: يشمل 3 إطلالات"></div>
+            </div>`).join('') || '<p class="muted">لا توجد خدمات بعد.</p>'}</div>
+          <button class="btn ghost sm" id="add">+ إضافة خدمة</button>
+        </div>
+        <div class="panel">
+          <h2>إعدادات الحجز</h2>
+          <div class="row">
+            <div class="field"><label class="f">رسوم التنقل (ر.س)</label><input class="in" type="number" min="0" id="travel" value="${esc(t.travelFee || 0)}"></div>
+            <div class="field"><label class="f">نسبة العربون %</label><input class="in" type="number" min="0" max="100" id="dep" value="${esc(t.deposit ?? 30)}"></div>
+          </div>
+        </div>
+        ${saveBar()}`;
+      pane.oninput = (e) => {
+        dirty = true;
+        const r = e.target.closest('.repeat');
+        if (r && e.target.dataset.f) {
+          const k = e.target.dataset.f;
+          s[+r.dataset.i][k] = ['price', 'minHours'].includes(k) ? +e.target.value : e.target.value;
+        }
+        if (e.target.id === 'travel') t.travelFee = +e.target.value;
+        if (e.target.id === 'dep') t.deposit = +e.target.value;
+      };
+      pane.onchange = pane.oninput;
+      $('#add').addEventListener('click', () => { s.push({ id: uid(), name: '', unit: 'hour', price: 0, minHours: 1, notes: '' }); pricing(pane); });
+      $$('[data-del]', pane).forEach((x) => x.addEventListener('click', () => { s.splice(+x.dataset.del, 1); pricing(pane); }));
+      bindSave(pane, () => { t.services = s.filter((x) => x.name.trim()); });
+    }
+
+    /* ---------- packages ---------- */
+    function packages(pane) {
+      const p = t.packages || (t.packages = []);
+      const admin = isAdmin();
+      pane.innerHTML = `
+        <div class="panel">
+          <h2>الباقات</h2>
+          <p class="muted mt0">اجمع خدماتك في باقات بسعر ثابت (نصف يوم، يوم كامل، باقة عروس…).</p>
+          <div id="list">${p.map((x, i) => `
+            <div class="repeat" data-i="${i}">
+              <div class="head">باقة ${i + 1}<button class="btn sm ghost" data-del="${i}">حذف</button></div>
+              <div class="row">
+                <div class="field"><label class="f">اسم الباقة</label><input class="in" data-f="name" value="${esc(x.name)}" placeholder="مثل: يوم كامل"></div>
+                <div class="field"><label class="f">السعر (ر.س)</label><input class="in" type="number" min="0" data-f="price" value="${esc(x.price)}"></div>
+                <div class="field"><label class="f">عدد الساعات</label><input class="in" type="number" min="0" data-f="hours" value="${esc(x.hours)}"></div>
+                <div class="field"><label class="f">شارة <span class="hint">(اختياري)</span></label><input class="in" data-f="badge" value="${esc(x.badge)}" placeholder="الأكثر طلبًا"></div>
+              </div>
+              <div class="field"><label class="f">ماذا تشمل؟ <span class="hint">(كل بند في سطر)</span></label><textarea class="in" data-f="includes" style="min-height:80px">${esc((x.includes || []).join('\n'))}</textarea></div>
+              ${admin ? `<div class="field" style="margin:0"><label class="f">رابط منتج الدفع في سلة <span class="hint">(للإدارة)</span></label><input class="in" data-f="sallaUrl" value="${esc(x.sallaUrl)}" dir="ltr" placeholder="https://aoss.shop/..."></div>` : ''}
+            </div>`).join('') || '<p class="muted">لا توجد باقات بعد.</p>'}</div>
+          <button class="btn ghost sm" id="add">+ إضافة باقة</button>
+        </div>
+        ${saveBar()}`;
+      pane.oninput = (e) => {
+        dirty = true;
+        const r = e.target.closest('.repeat');
+        if (!r || !e.target.dataset.f) return;
+        const k = e.target.dataset.f;
+        const v = e.target.value;
+        p[+r.dataset.i][k] = k === 'includes' ? v.split('\n').map((s) => s.trim()).filter(Boolean) : ['price', 'hours'].includes(k) ? +v : v;
+      };
+      pane.onchange = null;
+      $('#add').addEventListener('click', () => { p.push({ id: uid(), name: '', price: 0, hours: 0, includes: [], badge: '', sallaUrl: '' }); packages(pane); });
+      $$('[data-del]', pane).forEach((x) => x.addEventListener('click', () => { p.splice(+x.dataset.del, 1); packages(pane); }));
+      bindSave(pane, () => { t.packages = p.filter((x) => x.name.trim()); });
+    }
+
+    /* ---------- schedule & cities ---------- */
+    function schedule(pane) {
+      const av = t.availability;
+      const cities = t.cities || (t.cities = []);
+      pane.innerHTML = `
+        <div class="panel">
+          <h2>المدن التي تغطيها</h2>
+          <div class="chips" id="cities">${CITIES.map((c) => `<button class="chip" data-c="${c}" aria-pressed="${cities.includes(c)}">${c}</button>`).join('')}</div>
+        </div>
+        <div class="panel">
+          <h2>أيام وساعات العمل</h2>
+          <div class="chips" id="days">${DAYS.map((d, i) => `<button class="chip" data-d="${i}" aria-pressed="${av.days.includes(i)}">${d}</button>`).join('')}</div>
+          <div class="row" style="margin-top:14px">
+            <div class="field"><label class="f">من الساعة</label><input class="in" type="time" id="from" value="${esc(av.from)}"></div>
+            <div class="field"><label class="f">إلى الساعة</label><input class="in" type="time" id="to" value="${esc(av.to)}"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>أيام غير متاح فيها</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="in" type="date" id="bd" style="max-width:220px"><button class="btn sm ghost" id="addBd">إضافة</button></div>
+          <div class="chips" style="margin-top:12px">${(av.blocked || []).sort().map((d) => `<button class="chip on" data-bd="${d}">${d} ✕</button>`).join('') || '<span class="muted">لا يوجد</span>'}</div>
+        </div>
+        ${saveBar()}`;
+      $('#cities').addEventListener('click', (e) => {
+        const c = e.target.closest('[data-c]');
+        if (!c) return;
+        const i = cities.indexOf(c.dataset.c);
+        i >= 0 ? cities.splice(i, 1) : cities.push(c.dataset.c);
+        c.setAttribute('aria-pressed', i < 0);
+        dirty = true;
+      });
+      $('#days').addEventListener('click', (e) => {
+        const c = e.target.closest('[data-d]');
+        if (!c) return;
+        const d = +c.dataset.d;
+        const i = av.days.indexOf(d);
+        i >= 0 ? av.days.splice(i, 1) : av.days.push(d);
+        c.setAttribute('aria-pressed', i < 0);
+        dirty = true;
+      });
+      $('#from').addEventListener('change', (e) => { av.from = e.target.value; dirty = true; });
+      $('#to').addEventListener('change', (e) => { av.to = e.target.value; dirty = true; });
+      $('#addBd').addEventListener('click', () => {
+        const v = $('#bd').value;
+        if (v && !av.blocked.includes(v)) { av.blocked.push(v); schedule(pane); }
+      });
+      $$('[data-bd]', pane).forEach((x) => x.addEventListener('click', () => { av.blocked = av.blocked.filter((d) => d !== x.dataset.bd); schedule(pane); }));
+      bindSave(pane);
+    }
+
+    /* ---------- bookings ---------- */
+    function bookingsPane(pane, list) {
+      const L = { new: 'جديد', accepted: 'مقبول', declined: 'مرفوض', done: 'منفّذ' };
+      pane.innerHTML = `<div class="panel"><h2>طلبات الحجز</h2>${list.length ? list.map((x) => `
+        <div class="bk">
+          <div class="top-row"><b>${esc(x.item?.name || '')}${x.item?.kind === 'svc' ? ' × ' + x.qty : ''}</b><span class="status ${x.status}">${L[x.status] || x.status}</span></div>
+          <div class="muted">📅 ${esc(x.date)} ${esc(x.time)} · 📍 ${esc(x.city)} · ${money(x.total)}</div>
+          <div>${esc(x.customer?.name || '')}</div>
+          ${x.notes ? `<div class="hint" style="white-space:pre-line">${esc(x.notes)}</div>` : ''}
+          <div class="acts">${x.status === 'new' ? `<button class="btn sm" data-st="accepted" data-id="${x.id}">قبول</button><button class="btn sm ghost" data-st="declined" data-id="${x.id}">اعتذار</button>` : ''}
+          ${x.status === 'accepted' ? `<button class="btn sm ghost" data-st="done" data-id="${x.id}">تم التنفيذ</button>` : ''}</div>
+        </div>`).join('') : '<p class="muted">لا توجد طلبات بعد. شارك رابط ملفك لتبدأ باستقبال الطلبات.</p>'}
+        <p class="hint">بيانات تواصل العميل تحتفظ بها إدارة أسس ميديا، وتتواصل معك لتأكيد التفاصيل بعد قبولك.</p></div>`;
+      $$('[data-st]', pane).forEach((x) => x.addEventListener('click', async () => {
+        await b.updateBooking(x.dataset.id, { status: x.dataset.st });
+        toast('تم التحديث');
+        renderDash();
+      }));
+    }
+
+    window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  </script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ملف الكادر | AOSS MEDIA</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app"><div class="wrap"><div class="empty" style="margin:60px 0">جاري التحميل…</div></div></div>
+
+  <script type="module">
+    import { chrome, esc, money, $, $$, qs, lightbox, modal, toast, waLink } from './js/ui.js';
+    import { CONFIG } from './js/config.js';
+    import { categoryLabel, minPrice, imageSrc, DAYS, UNITS, isAdmin } from './js/store.js';
+
+    const b = await chrome('dir');
+    const key = qs('u') || '';
+    let t = await b.getTalentBySlug(key);
+    if (!t) {
+      // Owners and admins can preview a profile that is not approved yet.
+      const me = b.user();
+      const byId = await b.getTalent(key);
+      if (byId && (byId.status === 'approved' || (me && (me.uid === byId.uid || isAdmin())))) t = byId;
+    }
+    if (!t) {
+      $('#app').innerHTML = '<div class="wrap"><div class="empty" style="margin:60px 0">الملف غير موجود أو بانتظار الاعتماد. <a href="index.html">تصفّح الكوادر</a></div></div>';
+      throw new Error('not found');
+    }
+    document.title = `${t.name} — ${categoryLabel(t)} | AOSS MEDIA`;
+    document.documentElement.style.setProperty('--accent', t.accent || '#0a0a0a');
+
+    const [cover, avatar, ...gallery] = await Promise.all([imageSrc(t.cover), imageSrc(t.avatar), ...(t.gallery || []).map(imageSrc)]);
+    const gal = gallery.filter(Boolean);
+    const a = t.attributes || {};
+    const facts = [
+      a.height && ['الطول', a.height + ' سم'],
+      a.size && ['المقاس', a.size],
+      a.hairColor && ['لون الشعر', a.hairColor],
+      a.eyeColor && ['لون العين', a.eyeColor],
+      a.experience && ['سنوات الخبرة', a.experience],
+      (t.languages || []).length && ['اللغات', t.languages.join('، ')],
+    ].filter(Boolean);
+    const av = t.availability || { days: [], from: '', to: '' };
+    const services = t.services || [];
+    const packages = t.packages || [];
+    const p = minPrice(t);
+    const pendingNote = t.status !== 'approved' ? '<div class="demo-bar" style="background:#fbe5e3;color:#b3261e">معاينة: هذا الملف غير ظاهر للعملاء حتى يتم اعتماده.</div>' : '';
+
+    $('#app').innerHTML = `${pendingNote}
+      <div class="p-cover" style="background-image:url('${esc(cover)}')"></div>
+      <div class="wrap">
+        <div class="p-head">
+          <div class="p-avatar" style="background-image:url('${esc(avatar || cover)}')"></div>
+          <div class="p-id">
+            <h1>${esc(t.name)}</h1>
+            <div class="sub">${esc(categoryLabel(t))}${t.headline ? ' — ' + esc(t.headline) : ''}</div>
+            <div class="p-badges">${(t.cities || []).map((c) => `<span class="badge">📍 ${esc(c)}</span>`).join('')}</div>
+          </div>
+          <div class="p-cta">
+            <button class="btn" data-book>احجز الآن</button>
+            <a class="btn ghost" target="_blank" rel="noopener" href="${waLink(CONFIG.whatsapp, `استفسار عن الكادر: ${t.name}\n${location.href}`)}">استفسار واتساب</a>
+          </div>
+        </div>
+
+        <div class="p-layout">
+          <div>
+            ${t.bio ? `<section class="panel"><h2>نبذة</h2><p class="mt0" style="white-space:pre-line">${esc(t.bio)}</p>
+              ${a.specialties ? `<div class="chips">${a.specialties.split(/[،,]/).map((s) => s.trim()).filter(Boolean).map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div>` : ''}</section>` : ''}
+            ${facts.length ? `<section class="panel"><h2>معلومات</h2><div class="facts">${facts.map(([k, v]) => `<div class="fact"><b>${esc(v)}</b><span>${k}</span></div>`).join('')}</div></section>` : ''}
+            ${gal.length ? `<section class="panel"><h2>معرض الأعمال <span class="hint">(${gal.length})</span></h2><div class="gal">${gal.map((s, i) => `<button data-i="${i}" aria-label="صورة ${i + 1}"><img loading="lazy" src="${esc(s)}" alt=""></button>`).join('')}</div></section>` : ''}
+            ${services.length ? `<section class="panel"><h2>الخدمات والأسعار</h2>${services.map((s) => `
+              <div class="svc"><div><b>${esc(s.name)}</b><div class="n">${esc(s.notes || '')}${s.unit === 'hour' && s.minHours > 1 ? ` · الحد الأدنى ${s.minHours} ساعات` : ''}</div></div>
+              <div class="pr">${money(s.price)}<small>/ ${UNITS[s.unit] || ''}</small></div></div>`).join('')}
+              ${+t.travelFee ? `<p class="hint">رسوم التنقل: ${money(t.travelFee)}</p>` : ''}</section>` : ''}
+            ${packages.length ? `<section class="panel"><h2>الباقات</h2><div class="pkgs">${packages.map((k) => `
+              <div class="pkg ${k.badge ? 'hot' : ''}">${k.badge ? `<span class="bdg">${esc(k.badge)}</span>` : ''}
+                <h3>${esc(k.name)}</h3><div class="amt">${money(k.price)} ${k.hours ? `<small>· ${k.hours} ساعات</small>` : ''}</div>
+                <ul>${(k.includes || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+                <button class="btn sm" data-book="pkg:${esc(k.id)}">احجز الباقة</button></div>`).join('')}</div></section>` : ''}
+          </div>
+          <aside class="sticky">
+            <section class="panel">
+              <h2>احجز ${esc(t.name.split(/\s|—/)[0])}</h2>
+              <p class="mt0 muted">${p ? `الأسعار تبدأ من <b style="color:var(--ink)">${money(p)}</b>` : 'السعر حسب الطلب'}</p>
+              <h3 style="font-size:14px;margin:14px 0 8px">أيام العمل</h3>
+              <div class="avail">${DAYS.map((d, i) => `<span class="${(av.days || []).includes(i) ? 'on' : ''}">${d}</span>`).join('')}</div>
+              ${av.from ? `<p class="hint">من ${esc(av.from)} إلى ${esc(av.to)}</p>` : ''}
+              <button class="btn block" data-book style="margin-top:12px">اطلب حجز</button>
+              <p class="hint" style="margin-bottom:0">${+t.deposit ? `يؤكَّد الحجز بعربون ${t.deposit}% بعد موافقة الكادر.` : 'يؤكَّد الحجز بعد موافقة الكادر.'}</p>
+            </section>
+          </aside>
+        </div>
+      </div>`;
+
+    $$('.gal button').forEach((btn) => btn.addEventListener('click', () => lightbox(gal, +btn.dataset.i)));
+    $$('[data-book]').forEach((btn) => btn.addEventListener('click', () => openBooking(btn.dataset.book || '')));
+
+    function openBooking(pre) {
+      const opts = [
+        ...services.map((s) => ({ v: 'svc:' + s.id, label: `${s.name} — ${money(s.price)} / ${UNITS[s.unit] || ''}`, item: s, kind: 'svc' })),
+        ...packages.map((k) => ({ v: 'pkg:' + k.id, label: `باقة ${k.name} — ${money(k.price)}`, item: k, kind: 'pkg' })),
+      ];
+      if (!opts.length) {
+        location.href = waLink(CONFIG.whatsapp, `أرغب بحجز الكادر: ${t.name}\n${location.href}`);
+        return;
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const m = modal(`
+        <h2>طلب حجز — ${esc(t.name)}</h2>
+        <p class="muted mt0">املأ التفاصيل وسيتواصل معك فريق أسس ميديا لتأكيد الحجز.</p>
+        <form id="bf">
+          <div class="field"><label class="f">الخدمة أو الباقة</label>
+            <select class="in" name="opt">${opts.map((o) => `<option value="${o.v}" ${o.v === pre ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></div>
+          <div class="row">
+            <div class="field"><label class="f">التاريخ</label><input class="in" type="date" name="date" min="${today}" required></div>
+            <div class="field"><label class="f">وقت البدء</label><input class="in" type="time" name="time" value="${esc(av.from || '10:00')}" required></div>
+          </div>
+          <div class="row">
+            <div class="field" id="qtyf"><label class="f" id="qtyl">عدد الساعات</label><input class="in" type="number" name="qty" min="1" value="1"></div>
+            <div class="field"><label class="f">المدينة</label><select class="in" name="city">${(t.cities || ['—']).map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
+          </div>
+          <div class="row">
+            <div class="field"><label class="f">الاسم</label><input class="in" name="name" required autocomplete="name"></div>
+            <div class="field"><label class="f">الجوال</label><input class="in" name="phone" type="tel" required placeholder="05XXXXXXXX" autocomplete="tel"></div>
+          </div>
+          <div class="field"><label class="f">تفاصيل إضافية <span class="hint">(نوع التصوير، الموقع، عدد الإطلالات…)</span></label><textarea class="in" name="notes" style="min-height:80px"></textarea></div>
+          <div class="total" id="tot"></div>
+          <p class="hint" id="dayWarn" style="color:var(--bad);display:none">هذا اليوم خارج أيام عمل الكادر — يمكنك الإرسال وسيتم التنسيق.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn" type="submit">إرسال طلب الحجز</button>
+            <a class="btn ghost" id="payBtn" target="_blank" rel="noopener" style="display:none">الدفع عبر المتجر</a>
+            <button class="btn ghost" type="button" data-close>إلغاء</button>
+          </div>
+        </form>`);
+      const f = $('#bf', m.el);
+      const calc = () => {
+        const o = opts.find((x) => x.v === f.opt.value);
+        let qty = Math.max(1, +f.qty.value || 1);
+        let total = 0;
+        if (o.kind === 'pkg') {
+          $('#qtyf', m.el).style.display = 'none';
+          total = +o.item.price || 0;
+          qty = 1;
+        } else {
+          $('#qtyf', m.el).style.display = '';
+          $('#qtyl', m.el).textContent = 'العدد (' + (UNITS[o.item.unit] || 'وحدة') + ')';
+          const min = o.item.unit === 'hour' ? Math.max(1, +o.item.minHours || 1) : 1;
+          f.qty.min = min;
+          if (qty < min) { qty = min; f.qty.value = min; }
+          total = (+o.item.price || 0) * qty;
+        }
+        const travel = +t.travelFee || 0;
+        total += travel;
+        const dep = Math.round((total * (+t.deposit || 0)) / 100);
+        $('#tot', m.el).innerHTML = `<div>الإجمالي التقديري<small>${travel ? 'يشمل رسوم التنقل ' + money(travel) : ''}${dep ? ' · العربون ' + money(dep) : ''}</small></div><div>${money(total)}</div>`;
+        const pay = $('#payBtn', m.el);
+        if (o.kind === 'pkg' && o.item.sallaUrl) { pay.style.display = ''; pay.href = o.item.sallaUrl; } else pay.style.display = 'none';
+        if (f.date.value) {
+          const d = new Date(f.date.value + 'T12:00:00').getDay();
+          const blocked = (av.blocked || []).includes(f.date.value);
+          $('#dayWarn', m.el).style.display = !(av.days || []).includes(d) || blocked ? '' : 'none';
+        }
+        return { o, qty, total, dep, travel };
+      };
+      f.addEventListener('input', calc);
+      calc();
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const { o, qty, total, dep } = calc();
+        const btn = f.querySelector('[type=submit]');
+        btn.disabled = true;
+        try {
+          const rec = await b.createBooking({
+            talentId: t.uid,
+            talentName: t.name,
+            item: { kind: o.kind, id: o.item.id, name: o.item.name, unit: o.item.unit || 'package', price: +o.item.price || 0 },
+            qty, total, deposit: dep,
+            date: f.date.value, time: f.time.value, city: f.city.value,
+            customer: { name: f.name.value.trim(), phone: f.phone.value.trim() },
+            notes: f.notes.value.trim(),
+          });
+          const msg = `طلب حجز جديد #${rec.id.slice(-6)}\nالكادر: ${t.name}\n${o.item.name}${o.kind === 'svc' ? ` × ${qty}` : ''}\nالتاريخ: ${f.date.value} ${f.time.value}\nالمدينة: ${f.city.value}\nالإجمالي: ${total} ر.س\nالاسم: ${f.name.value}\nالجوال: ${f.phone.value}`;
+          m.el.querySelector('.box').innerHTML = `<h2>تم استلام طلبك ✓</h2><p>رقم الطلب <b>#${rec.id.slice(-6)}</b>. سيتواصل معك فريق أسس ميديا لتأكيد الموعد وطريقة الدفع.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" target="_blank" rel="noopener" href="${waLink(CONFIG.whatsapp, msg)}">تأكيد سريع عبر واتساب</a><button class="btn ghost" data-close>إغلاق</button></div>`;
+        } catch (err) {
+          btn.disabled = false;
+          toast('تعذّر الإرسال: ' + (err.message || err));
+        }
+      });
+    }
+  </script>
+</body>
+</html>

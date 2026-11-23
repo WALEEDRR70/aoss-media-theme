@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>الكوادر | AOSS MEDIA — مودل، ميكب آرتست، هير آرتست</title>
+  <meta name="description" content="احجز مودل أو ميكب آرتست أو هير آرتست أو كوادر فعاليات في السعودية عبر أسس ميديا. ملفات موثّقة، أسعار واضحة، وحجز مباشر.">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <section class="hero">
+    <div class="wrap">
+      <h1>كوادر جاهزة لإنتاجك القادم</h1>
+      <p>مودل، ميكب آرتست، هير آرتست، وكوادر فعاليات في مدن المملكة. تصفّح الأعمال، قارن الأسعار، واحجز مباشرة.</p>
+      <div class="actions">
+        <a class="btn light" href="#list">تصفّح الكوادر</a>
+        <a class="btn ghost" style="color:#fff;border-color:rgba(255,255,255,.5)" href="dashboard.html">انضم ككادر</a>
+      </div>
+    </div>
+  </section>
+
+  <main class="wrap" id="list">
+    <div class="filters">
+      <input class="in" id="q" type="search" placeholder="ابحث بالاسم أو التخصص…" aria-label="بحث">
+      <select class="in" id="city" aria-label="المدينة"><option value="">كل المدن</option></select>
+      <select class="in" id="sort" aria-label="الترتيب">
+        <option value="new">الأحدث</option>
+        <option value="low">الأقل سعرًا</option>
+        <option value="high">الأعلى سعرًا</option>
+      </select>
+    </div>
+    <div class="cats" id="cats"></div>
+    <div class="grid" id="grid"><div class="empty">جاري التحميل…</div></div>
+  </main>
+
+  <script type="module">
+    import { chrome, esc, money, $ } from './js/ui.js';
+    import { CATEGORIES, CITIES, categoryLabel, minPrice, hydrateImages } from './js/store.js';
+
+    const b = await chrome('dir');
+    const state = { cat: new URLSearchParams(location.search).get('cat') || '', city: new URLSearchParams(location.search).get('city') || '', q: '', sort: 'new' };
+    const all = await b.listTalents();
+
+    $('#city').innerHTML += CITIES.map((c) => `<option ${c === state.city ? 'selected' : ''}>${c}</option>`).join('');
+    $('#cats').innerHTML = [{ id: '', ar: 'الكل' }, ...CATEGORIES]
+      .map((c) => `<button class="chip" data-cat="${c.id}" aria-pressed="${c.id === state.cat}">${c.ar}</button>`).join('');
+
+    function render() {
+      const q = state.q.trim();
+      let list = all.filter((t) =>
+        (!state.cat || t.category === state.cat) &&
+        (!state.city || (t.cities || []).includes(state.city)) &&
+        (!q || [t.name, t.headline, t.crewRole, t.attributes?.specialties].join(' ').includes(q)));
+      if (state.sort === 'low') list.sort((a, b) => (minPrice(a) || 1e9) - (minPrice(b) || 1e9));
+      else if (state.sort === 'high') list.sort((a, b) => minPrice(b) - minPrice(a));
+      else list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      $('#grid').innerHTML = list.length ? list.map((t) => {
+        const ref = t.avatar || t.cover || (t.gallery || [])[0] || '';
+        const isRef = String(ref).startsWith('fs-img:');
+        const p = minPrice(t);
+        return `<a class="tcard" href="profile.html?u=${encodeURIComponent(t.slug || t.uid)}">
+          <div class="ph" ${isRef ? `data-bg-ref="${esc(ref)}"` : `style="background-image:url('${esc(ref)}')"`}><span class="tag">${esc(categoryLabel(t))}</span></div>
+          <div class="body">
+            <h3>${esc(t.name)}</h3>
+            <div class="meta">${esc(t.headline || '')}${(t.cities || []).length ? ' · ' + esc(t.cities.slice(0, 3).join('، ')) : ''}</div>
+            <div class="price">${p ? `<small>يبدأ من</small> ${money(p)}` : '<small>السعر عند الطلب</small>'}</div>
+          </div></a>`;
+      }).join('') : '<div class="empty" style="grid-column:1/-1">لا توجد نتائج مطابقة. جرّب مدينة أو تصنيفًا آخر.</div>';
+      hydrateImages($('#grid'));
+    }
+
+    $('#cats').addEventListener('click', (e) => {
+      const c = e.target.closest('[data-cat]');
+      if (!c) return;
+      state.cat = c.dataset.cat;
+      document.querySelectorAll('#cats .chip').forEach((x) => x.setAttribute('aria-pressed', x === c));
+      render();
+    });
+    $('#q').addEventListener('input', (e) => { state.q = e.target.value; render(); });
+    $('#city').addEventListener('change', (e) => { state.city = e.target.value; render(); });
+    $('#sort').addEventListener('change', (e) => { state.sort = e.target.value; render(); });
+    render();
+  </script>
+</body>
+</html>

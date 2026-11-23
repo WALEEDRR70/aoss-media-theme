@@ -1,0 +1,53 @@
+rules_version = '2';
+// AOSS Talents — paste into Firebase console → Firestore → Rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.email in ['info@aoss.media'];
+    }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Talent profiles: public when approved; owners edit their own, but only admins change status.
+    match /talents/{uid} {
+      allow read: if resource.data.status == 'approved' || isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.status == 'pending' && request.resource.data.uid == uid;
+      allow update: if isAdmin()
+        || (isOwner(uid) && request.resource.data.status == resource.data.status && request.resource.data.uid == uid);
+      allow delete: if isAdmin();
+    }
+
+    // Profile slugs (unique short links).
+    match /slugs/{slug} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.owner == request.auth.uid;
+      allow update, delete: if isAdmin() || (signedIn() && resource.data.owner == request.auth.uid);
+    }
+
+    // Compressed images stored as documents (< 1 MiB each).
+    match /images/{id} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.owner == request.auth.uid
+        && request.resource.data.data is string && request.resource.data.data.size() < 900000;
+      allow delete: if isAdmin() || (signedIn() && resource.data.owner == request.auth.uid);
+    }
+
+    // Booking requests: anyone can create; the talent and admins can read and update status.
+    match /bookings/{id} {
+      allow create: if request.resource.data.status == 'new'
+        && request.resource.data.talentId is string
+        && request.resource.data.total is number;
+      allow read: if isAdmin() || (signedIn() && resource.data.talentId == request.auth.uid);
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.talentId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+    }
+
+    // Customer contact details: write-once by the customer, readable by admins only.
+    match /contacts/{id} {
+      allow create: if request.resource.data.phone is string && request.resource.data.phone.size() < 30;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
