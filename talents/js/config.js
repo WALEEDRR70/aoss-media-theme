@@ -4,7 +4,7 @@
 // (data stays in this browser only).
 export const CONFIG = {
   // Public web config (safe to ship; access is enforced by firestore.rules).
-  firebase: {
+  firebase: window.__DEMO ? null : {
     apiKey: 'AIzaSyCesVhtw0fR-YEfAIr4RyP9INKWNzFQYDE',
     authDomain: 'aoss-talents.firebaseapp.com',
     projectId: 'aoss-talents',

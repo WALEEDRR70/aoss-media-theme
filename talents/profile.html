@@ -19,8 +19,12 @@
     let t = await b.getTalentBySlug(key);
     if (!t) {
       // Owners and admins can preview a profile that is not approved yet.
-      const me = b.user();
-      const byId = await b.getTalent(key);
+      const me = await new Promise((r) => { const off = b.onAuth((u) => { r(u); setTimeout(() => off && off(), 0); }); });
+      let byId = await b.getTalent(key);
+      if (!byId && me) {
+        const mine = await b.getTalent(me.uid);
+        if (mine && (mine.slug === key || mine.uid === key)) byId = mine;
+      }
       if (byId && (byId.status === 'approved' || (me && (me.uid === byId.uid || isAdmin())))) t = byId;
     }
     if (!t) {
