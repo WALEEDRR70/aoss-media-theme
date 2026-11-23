@@ -270,9 +270,11 @@ async function firebaseBackend(cfg) {
   const a = auth.getAuth(app);
   const db = fs.getFirestore(app);
   let resolved = false;
-  a.onAuthStateChanged((u) => {
+  a.onAuthStateChanged(async (u) => {
+    let claims = {};
+    if (u) claims = (await u.getIdTokenResult().catch(() => ({ claims: {} }))).claims || {};
     resolved = true;
-    current = u ? { uid: u.uid, email: u.email } : null;
+    current = u ? { uid: u.uid, email: u.email, admin: claims.admin === true, store: claims.store || '', getToken: () => u.getIdToken() } : null;
     listeners.forEach((fn) => fn(current));
   });
   const imgUrl = (id) => 'fs-img:' + id;
@@ -298,6 +300,9 @@ async function firebaseBackend(cfg) {
     async signOut() {
       await auth.signOut(a);
     },
+    async signInWithToken(token) {
+      await auth.signInWithCustomToken(a, token);
+    },
     user: () => current,
     async getTalent(id) {
       try {
@@ -322,6 +327,8 @@ async function firebaseBackend(cfg) {
       t.updatedAt = Date.now();
       const clean = JSON.parse(JSON.stringify(t));
       if (!isAdmin()) delete clean.status; // status is set by admins only (rules enforce it too)
+      delete clean.salla; // written by the server only
+      delete clean._slug;
       const ref = fs.doc(db, 'talents', t.uid);
       const exists = (await fs.getDoc(ref)).exists();
       if (!exists) clean.status = 'pending';
@@ -386,7 +393,32 @@ function splitContact(b) {
 }
 
 export function isAdmin() {
-  return !!(current && CONFIG.admins.includes(String(current.email || '').toLowerCase()));
+  return !!(current && (current.admin || CONFIG.admins.includes(String(current.email || '').toLowerCase())));
+}
+
+/* Call the backend (Cloud Function). Signed-in calls carry the Firebase ID token. */
+export async function api(path, body) {
+  if (!CONFIG.apiBase) throw new Error('الخادم غير مفعّل بعد');
+  const headers = { 'Content-Type': 'application/json' };
+  if (current && current.getToken) headers.Authorization = 'Bearer ' + (await current.getToken());
+  const r = await fetch(CONFIG.apiBase + path, { method: 'POST', headers, body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+  return j;
+}
+
+/* Push a talent to the Salla store (no-op until the backend is deployed). */
+export async function syncToSalla(uid) {
+  if (!CONFIG.apiBase) return null;
+  return api('/sync', uid ? { uid } : {});
+}
+
+/* First Salla product link for a talent (preferring the main store). */
+export function sallaLink(t) {
+  const links = Object.entries(t.salla || {}).filter(([, v]) => v && v.productId && v.url && !v.hidden);
+  if (!links.length) return null;
+  const pref = links.find(([m]) => m === String(CONFIG.mainMerchant)) || links[0];
+  return { merchant: pref[0], ...pref[1] };
 }
 
 let backendPromise = null;

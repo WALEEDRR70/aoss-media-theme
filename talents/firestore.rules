@@ -4,17 +4,18 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isAdmin() {
-      return signedIn() && request.auth.token.email_verified == true
-        && request.auth.token.email in ['info@aoss.media'];
+      return signedIn() && (request.auth.token.admin == true
+        || (request.auth.token.email_verified == true && request.auth.token.email in ['info@aoss.media']));
     }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
 
     // Talent profiles: public when approved; owners edit their own, but only admins change status.
     match /talents/{uid} {
       allow read: if resource.data.status == 'approved' || isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) && request.resource.data.status == 'pending' && request.resource.data.uid == uid;
+      allow create: if isOwner(uid) && request.resource.data.status == 'pending' && request.resource.data.uid == uid
+        && !('salla' in request.resource.data);
       allow update: if isAdmin()
-        || (isOwner(uid) && request.resource.data.status == resource.data.status && request.resource.data.uid == uid);
+        || (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'salla', 'uid']));
       allow delete: if isAdmin();
     }
 
@@ -42,6 +43,11 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (signedIn() && resource.data.talentId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+    }
+
+    // Store tokens: server only (Admin SDK bypasses rules).
+    match /merchants/{id} {
+      allow read, write: if false;
     }
 
     // Customer contact details: write-once by the customer, readable by admins only.

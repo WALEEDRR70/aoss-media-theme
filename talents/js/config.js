@@ -12,6 +12,10 @@ export const CONFIG = {
     messagingSenderId: '698114141608',
     appId: '1:698114141608:web:91b1efb5c432ef7fdf819d',
   },
+  // Backend (Cloud Function `api`) — filled after deployment.
+  apiBase: '',
+  // Salla merchant id of aoss.shop (preferred store for booking links).
+  mainMerchant: '',
   // Emails allowed to approve talents in admin.html
   admins: ['info@aoss.media'],
   // AOSS store and contact

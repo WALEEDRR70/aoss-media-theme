@@ -238,3 +238,7 @@ footer.foot .wrap { display: flex; justify-content: space-between; gap: 12px; fl
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .mt0 { margin-top: 0; }
 .muted { color: var(--grey); }
+
+/* opened inside the Salla store or dashboard */
+body.embedded .top, body.embedded .foot, body.embedded .demo-bar { display: none; }
+body.embedded .side { top: 12px; }

@@ -1,0 +1,11 @@
+{
+  "name": "aoss-talents-api",
+  "version": "1.0.0",
+  "description": "AOSS Talents backend: Salla webhooks, product sync, store and dashboard sign-in, image serving.",
+  "main": "index.js",
+  "engines": { "node": "20" },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0",
+    "firebase-admin": "^12.7.0"
+  }
+}

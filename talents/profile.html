@@ -12,7 +12,7 @@
   <script type="module">
     import { chrome, esc, money, $, $$, qs, lightbox, modal, toast, waLink } from './js/ui.js';
     import { CONFIG } from './js/config.js';
-    import { categoryLabel, minPrice, imageSrc, DAYS, UNITS, isAdmin } from './js/store.js';
+    import { categoryLabel, minPrice, imageSrc, DAYS, UNITS, isAdmin, sallaLink } from './js/store.js';
 
     const b = await chrome('dir');
     const key = qs('u') || '';
@@ -98,7 +98,13 @@
       </div>`;
 
     $$('.gal button').forEach((btn) => btn.addEventListener('click', () => lightbox(gal, +btn.dataset.i)));
-    $$('[data-book]').forEach((btn) => btn.addEventListener('click', () => openBooking(btn.dataset.book || '')));
+    const shop = sallaLink(t);
+    $$('[data-book]').forEach((btn) => btn.addEventListener('click', () => {
+      // Linked to Salla: book and pay through the store checkout.
+      if (shop) { location.href = shop.url; return; }
+      openBooking(btn.dataset.book || '');
+    }));
+    if (shop) $$('[data-book]').forEach((btn) => { if (!btn.dataset.book) btn.textContent = 'احجز وادفع عبر المتجر'; });
 
     function openBooking(pre) {
       const opts = [
